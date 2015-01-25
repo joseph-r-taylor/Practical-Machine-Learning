@@ -1,0 +1,157 @@
+---
+title: "Fitness Models"
+author: "Joseph R. Taylor"
+date: "Sunday, January 25, 2015"
+output: pdf_document
+---
+
+## JHU/Coursera Data Science Specialization ##
+## Practical Machine Learning - Project ##
+
+### Background ###
+
+
+"Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible 
+to collect a large amount of data about personal activity relatively 
+inexpensively. These type of devices are part of the quantified self movement 
+- a group of enthusiasts who take measurements about themselves regularly to 
+improve their health, to find patterns in their behavior, or because they are 
+tech geeks. One thing that people regularly do is quantify how much of a 
+particular activity they do, but they rarely quantify how well they do it. 
+In this project, your goal will be to use data from accelerometers on the belt, 
+forearm, arm, and dumbell of 6 participants. They were asked to perform barbell 
+lifts correctly and incorrectly in 5 different ways. More information 
+is available from the website http://groupware.les.inf.puc-rio.br/har
+
+### Data  ###
+
+
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+***
+
+I downloaded the data externally and will now begin operations on them.
+
+***
+
+```{r}
+setwd("~/Coursera/Practical Machine Learning")
+train <- read.csv(file="pml-training.csv",head=TRUE,sep=",")
+test <- read.csv(file="pml-testing.csv",head=TRUE,sep=",")
+```
+
+***
+
+A look at the training data reveals:
+```{r}
+dim(train)
+```
+
+19622 observations and 160 features.
+
+The distribution of the five classes sitting-down, standing-up, standing, 
+walking, and sitting), labeled A Through E, respectively, are:
+
+```{r}
+table(train$classe)
+```
+***
+
+### Preprocessing  ###
+#### Partitioning ####
+
+Separate the training data and test data so that we can validate our model
+
+```{r}
+library(caret)
+set.seed(314159)
+trainset <- createDataPartition(train$classe, p = 0.7, list = FALSE)
+training <- train[trainset, ]
+testing <- train[-trainset, ]
+```
+
+#### Selecting Features ####
+Clean up near-zero variance features, columns with missing values and 
+descriptive fields.
+
+```{r}
+# exclude near zero variance features
+nzvcol <- nearZeroVar(training)
+training <- training[, -nzvcol]
+
+# exclude columns with m40% ore more missing values exclude descriptive
+# columns like name etc
+cntlength <- sapply(training, function(x) {
+    sum(!(is.na(x) | x == ""))
+})
+nullcol <- names(cntlength[cntlength < 0.6 * length(training$classe)])
+descriptcol <- c("X", "user_name", "raw_timestamp_part_1", 
+                 "raw_timestamp_part_2", "cvtd_timestamp", "new_window", 
+                 "num_window")
+excludecols <- c(descriptcol, nullcol)
+training <- training[, !names(training) %in% excludecols]
+```
+
+### Train the Model  ###
+
+Using RandomForest
+
+```{r}
+library(randomForest)
+```
+
+With ten trees
+```{r}
+ranformodel <- randomForest(classe ~ ., data = training, importance = TRUE, 
+                        ntrees = 10)
+```
+
+### Validation  ###
+#### Accuracy of Training Set ####
+
+```{r}
+ptraining <- predict(ranformodel, training)
+print(confusionMatrix(ptraining, training$classe))
+```
+
+One would expect this level of performance against the training set
+
+#### Accuracy of Test Set ####
+
+```{r}
+ptest <- predict(ranformodel, testing)
+print(confusionMatrix(ptest, testing$classe))
+```
+
+The cross-validation accuracy is 99.6%. The out-of-sample error is 0.4%. The 
+model performs well.
+
+### Test Set Prediction  ###
+
+```{r}
+predtest <- predict(ranformodel, testing)
+predtest
+```
+
+
+Saving the output to files according to project instructions. 
+
+```{r}
+answers <- as.vector(ptest)
+
+pml_write_files = function(x) {
+    n = length(x)
+    for (i in 1:n) {
+        filename = paste0("problem_id_", i, ".txt")
+        write.table(x[i], file = filename, quote = FALSE, row.names = FALSE, 
+            col.names = FALSE)
+    }
+}
+pml_write_files(answers)
+```
